@@ -93,7 +93,71 @@ or a question/fix request.
 
 ---
 
-# 1) Python Environment Management (MANDATORY)
+# 1) Microservices Architecture (MANDATORY)
+
+This project follows a **microservices design pattern**.
+
+All business logic lives inside `services/`. Each service is self-contained.
+
+---
+
+## Services
+
+There are **4 services**:
+
+| Service | Responsibility |
+|---------|---------------|
+| `services/data_generator` | Synthetic data generation, data validation |
+| `services/training` | Feature engineering, model training, evaluation, promotion |
+| `services/scoring` | Batch scoring, business output generation |
+| `services/monitor` | Data drift, prediction drift, backtesting |
+
+---
+
+## Rules
+
+1. **All business logic must live inside a service.** No business logic in `pipelines/`, `dags/`, or root-level directories.
+2. **Each service owns its domain.** Models, features, evaluation — all belong to `services/training/`. Drift logic belongs to `services/monitor/`.
+3. **No root-level `models/` or `features/` directories.** These are absorbed into their owning service.
+4. **Services expose a public API** via their `__init__.py` or top-level modules. External code imports from the service package, not from internal files.
+5. **Pipelines are thin orchestrators.** `pipelines/*.py` import from services and wire together I/O. They contain no ML logic, no feature transforms, no model code.
+6. **DAGs are thinner still.** `dags/*.py` call pipeline scripts. They contain no business logic and no direct service imports.
+7. **Services may import from other services** when needed (e.g., scoring imports the trained model from training artifacts), but circular dependencies are forbidden.
+
+---
+
+## Service internal structure
+
+Each service follows this pattern:
+
+```
+services/<service_name>/
+├── __init__.py          # Public API exports
+├── <core_modules>.py    # Business logic
+└── run.py               # CLI entry point (optional)
+```
+
+Larger services may have sub-packages:
+
+```
+services/training/
+├── __init__.py
+├── features/
+│   ├── __init__.py
+│   └── feature_engineering.py
+├── models/
+│   ├── __init__.py
+│   ├── baseline_model.py
+│   ├── challenger_model.py
+│   └── evaluation.py
+├── promotion.py
+├── calibration.py
+└── run.py
+```
+
+---
+
+# 2) Python Environment Management (MANDATORY)
 
 This project is **exclusively managed using** uv.
 
@@ -337,26 +401,43 @@ Airflow orchestrates the pipeline steps.
 ├── pyproject.toml
 ├── uv.lock
 ├── services
-│   ├── data_generator
-│   ├── training
-│   ├── scoring
-│   └── monitor
-├── pipelines
+│   ├── data_generator/           # Service: synthetic data + validation
+│   │   ├── __init__.py
+│   │   ├── generator.py
+│   │   ├── validator.py
+│   │   └── run.py
+│   ├── training/                 # Service: features, models, evaluation
+│   │   ├── __init__.py
+│   │   ├── features/
+│   │   │   ├── __init__.py
+│   │   │   └── feature_engineering.py
+│   │   ├── models/
+│   │   │   ├── __init__.py
+│   │   │   ├── baseline_model.py
+│   │   │   ├── challenger_model.py
+│   │   │   └── evaluation.py
+│   │   ├── promotion.py
+│   │   ├── calibration.py
+│   │   └── run.py
+│   ├── scoring/                  # Service: batch scoring + business output
+│   │   ├── __init__.py
+│   │   ├── scorer.py
+│   │   ├── retention_actions.py
+│   │   └── run.py
+│   └── monitor/                  # Service: drift + backtesting
+│       ├── __init__.py
+│       ├── data_drift.py
+│       ├── prediction_drift.py
+│       ├── backtester.py
+│       └── run.py
+├── pipelines                     # Thin orchestrators (no business logic)
 │   ├── build_dataset.py
 │   ├── train_pipeline.py
 │   ├── score_pipeline.py
 │   ├── drift_pipeline.py
 │   ├── backtest_pipeline.py
 │   └── validate_data.py
-├── features
-│   └── feature_engineering.py
-├── models
-│   ├── baseline_model.py
-│   ├── challenger_model.py
-│   ├── evaluation.py
-│   ├── promotion.py
-│   └── calibration.py
-├── dags
+├── dags                          # Airflow DAGs (call pipelines only)
 │   ├── generate_data_dag.py
 │   ├── build_dataset_dag.py
 │   ├── train_models_dag.py
@@ -488,7 +569,7 @@ Pipelines must **fail loudly** on validation errors.
 Location:
 
 ```
-features/feature_engineering.py
+services/training/features/feature_engineering.py
 ```
 
 Example engineered features:

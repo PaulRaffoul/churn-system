@@ -3,4 +3,13 @@ name = "churn-system"
 version = "0.1.0"
 description = "Production-grade batch ML churn prediction system"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "numpy>=2.4.3",
+    "pandas>=3.0.1",
+    "pyarrow>=23.0.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]

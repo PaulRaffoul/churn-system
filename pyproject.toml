@@ -1,0 +1,6 @@
+[project]
+name = "churn-system"
+version = "0.1.0"
+description = "Production-grade batch ML churn prediction system"
+requires-python = ">=3.11"
+dependencies = []

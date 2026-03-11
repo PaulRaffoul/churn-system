@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+wheels/
+.venv/
+
+# Environment
+.env
+
+# Data (tracked via .gitkeep)
+data/raw/*
+data/processed/*
+data/scoring/*
+data/scored/*
+data/drift_reports/*
+data/backtests/*
+!data/**/.gitkeep
+
+# Model artifacts
+model_artifacts/champion/*
+model_artifacts/challenger/*
+!model_artifacts/**/.gitkeep
+
+# MLflow
+mlruns/
+
+# Airflow
+airflow_home/
+
+# IDE
+.vscode/
+.idea/

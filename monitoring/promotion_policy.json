@@ -1,0 +1,5 @@
+{
+  "promotion_rule": "challenger ROC-AUC >= champion ROC-AUC + 0.01 AND recall >= minimum_threshold",
+  "min_roc_auc_improvement": 0.01,
+  "min_recall_threshold": 0.50
+}

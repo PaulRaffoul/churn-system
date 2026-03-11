@@ -1,0 +1,4 @@
+# Docker Compose — Placeholder
+# Will be configured in a later step
+version: "3.8"
+services: {}

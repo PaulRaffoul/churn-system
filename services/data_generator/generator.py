@@ -70,8 +70,11 @@ def generate_churn_dataset(
     plan_changes_last_6m = rng.poisson(lam=0.3, size=n_customers).clip(0, 4)
 
     # --- Churn probability (latent score) ---
-    # Higher score = more likely to churn
-    churn_score = np.zeros(n_customers, dtype=float)
+    # Higher score = more likely to churn.
+    # Bias term shifts the baseline so that a typical customer has ~5-7%
+    # churn probability (sigmoid(-3.0) ≈ 4.7%).  Only customers with
+    # genuinely bad signals accumulate enough score to churn.
+    churn_score = np.full(n_customers, -3.0)
 
     # Inactivity drives churn
     churn_score += 0.02 * days_since_last_activity

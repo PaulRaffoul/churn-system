@@ -49,11 +49,11 @@ def test_churn_label_binary():
     assert set(df["churned_30d"].unique()).issubset({0, 1})
 
 
-def test_churn_rate_reasonable():
-    """Churn rate should be between 5% and 80% (sanity check)."""
+def test_churn_rate_realistic():
+    """Churn rate should be realistic: between 1% and 8%."""
     df = generate_churn_dataset(n_customers=5000, seed=42)
     rate = df["churned_30d"].mean()
-    assert 0.05 < rate < 0.80, f"Churn rate {rate:.2%} outside expected range"
+    assert 0.01 < rate <= 0.08, f"Churn rate {rate:.2%} outside expected range [1%-8%]"
 
 
 def test_reproducibility():

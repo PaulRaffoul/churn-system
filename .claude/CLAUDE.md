@@ -21,7 +21,7 @@ in the root of your project.
 
 # CLAUDE_CODE.md — Production-Grade Batch ML Churn Prediction System
 
-Owner: Pierre
+Owner: Paul
 
 Goal: Build a **production-grade batch churn prediction platform** that generates synthetic customer data, trains and compares models, monitors drift, orchestrates pipelines with Airflow, and produces business-ready churn scoring outputs.
 

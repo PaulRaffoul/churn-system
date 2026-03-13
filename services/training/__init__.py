@@ -7,6 +7,13 @@ from services.training.features import (
     TARGET,
     engineer_features,
 )
+from services.training.models import (
+    MODEL_NAME,
+    build_champion_pipeline,
+    compute_metrics,
+    predict_proba,
+    train_champion,
+)
 
 __all__ = [
     "CATEGORICAL_FEATURES",
@@ -14,4 +21,9 @@ __all__ = [
     "NUMERIC_FEATURES",
     "TARGET",
     "engineer_features",
+    "MODEL_NAME",
+    "build_champion_pipeline",
+    "compute_metrics",
+    "predict_proba",
+    "train_champion",
 ]

@@ -11,7 +11,7 @@ from services.training.models.challenger_model import (
     build_challenger_pipeline,
     train_challenger,
 )
-from services.training.models.evaluation import compute_metrics
+from services.training.models.evaluation import compute_metrics, find_optimal_threshold
 
 __all__ = [
     "MODEL_NAME",
@@ -19,6 +19,7 @@ __all__ = [
     "build_champion_pipeline",
     "build_challenger_pipeline",
     "compute_metrics",
+    "find_optimal_threshold",
     "predict_proba",
     "train_champion",
     "train_challenger",

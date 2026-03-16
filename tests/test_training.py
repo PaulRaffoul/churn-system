@@ -14,6 +14,7 @@ from services.training import (
     compare_models,
     compute_metrics,
     engineer_features,
+    find_optimal_threshold,
     predict_proba,
     train_challenger,
     train_champion,
@@ -255,3 +256,69 @@ class TestEvaluation:
         metrics_low = compute_metrics(y_true, y_prob, threshold=0.3)
         # Lower threshold → more positives → higher recall
         assert metrics_low["recall"] >= metrics_default["recall"]
+
+
+# ---------------------------------------------------------------------------
+# Threshold optimization
+# ---------------------------------------------------------------------------
+class TestThresholdOptimization:
+    def test_f1_strategy_returns_valid_threshold(self):
+        """F1 strategy should return a threshold between 0 and 1."""
+        y_true = np.array([0, 0, 0, 0, 0, 1, 1, 1, 1, 1])
+        y_prob = np.array([0.1, 0.2, 0.3, 0.35, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9])
+        threshold = find_optimal_threshold(y_true, y_prob, strategy="f1")
+        assert 0.0 <= threshold <= 1.0
+
+    def test_recall_strategy_meets_target(self):
+        """Recall strategy should find a threshold achieving the target recall."""
+        y_true = np.array([0, 0, 0, 0, 0, 1, 1, 1, 1, 1])
+        y_prob = np.array([0.1, 0.2, 0.3, 0.35, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9])
+        threshold = find_optimal_threshold(y_true, y_prob, strategy="recall", min_recall=0.65)
+        # Apply the threshold and check recall
+        y_pred = (y_prob >= threshold).astype(int)
+        recall = y_pred[y_true == 1].sum() / y_true.sum()
+        assert recall >= 0.65
+
+    def test_recall_strategy_maximizes_precision(self):
+        """Recall strategy should pick the highest threshold that still meets recall."""
+        y_true = np.array([0, 0, 0, 0, 0, 1, 1, 1, 1, 1])
+        y_prob = np.array([0.1, 0.2, 0.3, 0.35, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9])
+        # Lower min_recall allows a higher threshold
+        threshold_low = find_optimal_threshold(y_true, y_prob, strategy="recall", min_recall=0.40)
+        threshold_high = find_optimal_threshold(y_true, y_prob, strategy="recall", min_recall=0.80)
+        assert threshold_low >= threshold_high
+
+    def test_f1_strategy_better_than_default(self, trained_champion, processed_df, feature_cols):
+        """Optimized threshold should produce better F1 than default 0.5."""
+        X = processed_df[feature_cols]
+        y = processed_df[TARGET].values
+        probs = predict_proba(trained_champion, X)
+
+        default_metrics = compute_metrics(y, probs, threshold=0.5)
+        optimal_threshold = find_optimal_threshold(y, probs, strategy="f1")
+        optimal_metrics = compute_metrics(y, probs, threshold=optimal_threshold)
+
+        assert optimal_metrics["f1"] >= default_metrics["f1"]
+
+    def test_recall_strategy_on_imbalanced_data(self, trained_champion, processed_df, feature_cols):
+        """Recall strategy should achieve target recall on realistic imbalanced data."""
+        X = processed_df[feature_cols]
+        y = processed_df[TARGET].values
+        probs = predict_proba(trained_champion, X)
+
+        threshold = find_optimal_threshold(y, probs, strategy="recall", min_recall=0.65)
+        metrics = compute_metrics(y, probs, threshold=threshold)
+        assert metrics["recall"] >= 0.65
+
+    def test_invalid_strategy_raises(self):
+        y_true = np.array([0, 1])
+        y_prob = np.array([0.3, 0.7])
+        with pytest.raises(ValueError, match="Unknown strategy"):
+            find_optimal_threshold(y_true, y_prob, strategy="invalid")
+
+    def test_threshold_saved_in_metrics(self):
+        """compute_metrics should include the threshold used."""
+        y_true = np.array([0, 0, 1, 1])
+        y_prob = np.array([0.1, 0.4, 0.6, 0.9])
+        metrics = compute_metrics(y_true, y_prob, threshold=0.3)
+        assert metrics["threshold"] == 0.3

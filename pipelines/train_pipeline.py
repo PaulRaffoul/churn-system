@@ -23,6 +23,7 @@ from services.training import (
     TARGET,
     compare_models,
     compute_metrics,
+    find_optimal_threshold,
     predict_proba,
     train_challenger,
     train_champion,
@@ -103,13 +104,18 @@ def main() -> None:
     print("\n--- Champion: Logistic Regression ---")
     champion_pipeline = train_champion(X_train, y_train)
     champion_probs = predict_proba(champion_pipeline, X_val)
-    champion_metrics = compute_metrics(y_val, champion_probs)
+
+    champion_threshold = find_optimal_threshold(
+        y_val, champion_probs, strategy="recall", min_recall=0.65,
+    )
+    champion_metrics = compute_metrics(y_val, champion_probs, threshold=champion_threshold)
 
     champion_metrics["train_rows"] = len(train_df)
     champion_metrics["val_rows"] = len(val_df)
     champion_metrics["train_churn_rate"] = round(float(y_train.mean()), 4)
     champion_metrics["val_churn_rate"] = round(float(y_val.mean()), 4)
 
+    print(f"  Threshold: {champion_metrics['threshold']}")
     print(f"  ROC-AUC:   {champion_metrics['roc_auc']}")
     print(f"  Precision: {champion_metrics['precision']}")
     print(f"  Recall:    {champion_metrics['recall']}")
@@ -122,13 +128,18 @@ def main() -> None:
     print("\n--- Challenger: Random Forest ---")
     challenger_pipeline = train_challenger(X_train, y_train)
     challenger_probs = predict_proba(challenger_pipeline, X_val)
-    challenger_metrics = compute_metrics(y_val, challenger_probs)
+
+    challenger_threshold = find_optimal_threshold(
+        y_val, challenger_probs, strategy="recall", min_recall=0.65,
+    )
+    challenger_metrics = compute_metrics(y_val, challenger_probs, threshold=challenger_threshold)
 
     challenger_metrics["train_rows"] = len(train_df)
     challenger_metrics["val_rows"] = len(val_df)
     challenger_metrics["train_churn_rate"] = round(float(y_train.mean()), 4)
     challenger_metrics["val_churn_rate"] = round(float(y_val.mean()), 4)
 
+    print(f"  Threshold: {challenger_metrics['threshold']}")
     print(f"  ROC-AUC:   {challenger_metrics['roc_auc']}")
     print(f"  Precision: {challenger_metrics['precision']}")
     print(f"  Recall:    {challenger_metrics['recall']}")

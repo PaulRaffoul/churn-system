@@ -303,13 +303,14 @@ Required features:
 6. Challenger model (Random Forest / Gradient Boosting)
 7. Champion vs challenger comparison
 8. Explicit promotion policy
-9. Batch scoring pipeline
-10. Business-ready churn outputs
-11. MLflow experiment tracking
-12. Docker Compose environment
-13. Structured JSON logging
-14. pytest test suite
-15. GitHub Actions CI
+9. Threshold optimization (moved from Tier 3 — required before scoring to produce meaningful predictions with imbalanced churn data)
+10. Batch scoring pipeline
+11. Business-ready churn outputs
+12. MLflow experiment tracking
+13. Docker Compose environment
+14. Structured JSON logging
+15. pytest test suite
+16. GitHub Actions CI
 
 ---
 
@@ -333,9 +334,8 @@ Add:
 Add:
 
 1. Calibration analysis
-2. Threshold optimization
-3. Promotion gating rules
-4. Drift history tracking
+2. Promotion gating rules
+3. Drift history tracking
 5. Performance monitoring over time
 6. Explainability artifacts
 7. Retention policy simulation

@@ -4,7 +4,7 @@ Last updated: 2026-03-16
 
 ## Where we are
 
-**Completed through Phase 6.** Next up is **Phase 7: Batch scoring pipeline + business retention outputs.**
+**Completed through Phase 6.** Next session (2026-03-17): tackle class imbalance, then **Phase 7: Batch scoring pipeline + business retention outputs.**
 
 ## Completed Phases
 
@@ -16,7 +16,7 @@ Last updated: 2026-03-16
 | Phase 3 | Feature engineering (6 derived features, 22 total columns) | `0d0a477` |
 | Phase 4 | Champion model (Logistic Regression, ROC-AUC 0.70) + pipelines | `cd9c176` |
 | Phase 5 | Challenger model (Random Forest) + promotion policy | `4c153ac` |
-| Phase 6 | Threshold optimization + clean separation of concerns | pending |
+| Phase 6 | Threshold optimization + simplified ROC-AUC-only promotion | `9ddbc5a` |
 
 ## Current State
 
@@ -29,38 +29,37 @@ uv run python -m pipelines.train_pipeline            # Train both models, compar
 uv run pytest                                        # 77 tests pass
 ```
 
-### Artifacts produced
-- `data/raw/churn_data.parquet` — 5000 customers, seed=42
-- `data/processed/churn_processed.parquet` — 22 columns (16 raw + 6 engineered)
-- `model_artifacts/champion/model.joblib` — trained LogisticRegression pipeline
-- `model_artifacts/champion/metrics.json` — ROC-AUC 0.70
-- `model_artifacts/challenger/model.joblib` — trained RandomForest pipeline
-- `model_artifacts/challenger/metrics.json` — ROC-AUC 0.65
-- `model_artifacts/model_comparison.json` — champion retained
-
 ### Key metrics
-- Churn rate: 5.1% (capped at 8% by validator)
+- Churn rate: 5.1% (~250 churners out of 5000)
 - Champion (LR): ROC-AUC 0.6988
 - Challenger (RF): ROC-AUC 0.6524
 
-### Design decisions
+### Design decisions made this session
+- Promotion policy uses ROC-AUC only (threshold-independent)
+- Threshold optimization deferred to scoring time (recall strategy, min_recall=0.65)
+- Moved threshold optimization from Tier 3 to Tier 1
 
-**Separation of concerns for thresholds:**
-- Training pipeline compares models on ROC-AUC only (threshold-independent)
-- Scoring pipeline will apply threshold optimization (recall-targeted, min_recall=0.65) at deployment time
-- This avoids the problem of threshold-optimized metrics being artificially equal between models
+## Open item: Class Imbalance
 
-**Promotion policy:** challenger ROC-AUC >= champion ROC-AUC + 0.01
+We tried `class_weight="balanced"` on both models. Results:
+- Champion ROC-AUC dropped: 0.6988 → 0.6965
+- Challenger ROC-AUC dropped: 0.6524 → 0.6401
+- Probabilities spread to full 0-1 range (better calibrated) but ranking quality got worse
+- **Reverted** — unweighted models rank better on this dataset
 
-**Threshold optimization (available, used at scoring time):**
-- `find_optimal_threshold()` in `services/training/models/evaluation.py`
-- Two strategies: "f1" (balanced) and "recall" (churn-optimized)
-- Scoring pipeline will use "recall" strategy with min_recall=0.65
+Techniques still to try next session:
+1. **SMOTE** (Synthetic Minority Over-sampling) — generates synthetic churner samples by interpolating between existing ones. Requires `imbalanced-learn` dependency. May help RF more than LR.
+2. **Increase synthetic data size** — generate 10,000-20,000 customers instead of 5,000 to give models more churner examples to learn from. Simplest approach.
+3. **Tune class_weight with custom ratios** — instead of "balanced" (which uses 1/frequency), try intermediate weights like {0: 1, 1: 5} or {0: 1, 1: 10}.
+4. **Feature engineering improvements** — better features may matter more than resampling. Look at interaction features or nonlinear transforms.
+5. **Gradient Boosting challenger** — XGBoost/LightGBM with `scale_pos_weight` handles imbalance natively and often outperforms RF on tabular data.
 
-## What's next — Phase 7
+Note: The real bottleneck may be synthetic data quality, not class imbalance. With only ~250 churners and synthetic patterns, there's limited signal to learn from.
+
+## What's next — Phase 7 (after class imbalance work)
 
 **Batch scoring pipeline + business retention outputs:**
-- `services/scoring/scorer.py` — load champion model, apply threshold optimization (recall strategy), score new customers, assign risk bands
+- `services/scoring/scorer.py` — load champion model, apply threshold optimization (recall strategy), score customers, assign risk bands
 - `services/scoring/retention_actions.py` — generate recommended actions per risk band
 - `pipelines/score_pipeline.py` — thin orchestrator
 - Output: `data/scored/churn_scores.parquet` + `data/scored/retention_actions.parquet`
@@ -77,7 +76,7 @@ After Phase 7, remaining Tier 1 items:
 ```
 services/ (business logic)
   ├── data_generator/  ✅ generator.py, validator.py
-  ├── training/        ✅ features/, models/ (champion + challenger), promotion.py, evaluation.py (threshold optimization)
+  ├── training/        ✅ features/, models/ (champion + challenger), promotion.py, evaluation.py
   ├── scoring/         ⬜ placeholder
   └── monitor/         ⬜ placeholder
 

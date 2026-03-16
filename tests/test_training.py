@@ -1,4 +1,4 @@
-"""Tests for model training and evaluation."""
+"""Tests for model training, evaluation, and promotion."""
 
 import numpy as np
 import pandas as pd
@@ -7,14 +7,19 @@ import pytest
 from services.data_generator import generate_churn_dataset
 from services.training import (
     CATEGORICAL_FEATURES,
+    CHALLENGER_MODEL_NAME,
+    MODEL_NAME,
     NUMERIC_FEATURES,
     TARGET,
+    compare_models,
     compute_metrics,
     engineer_features,
     predict_proba,
+    train_challenger,
     train_champion,
 )
 from services.training.models.baseline_model import build_champion_pipeline
+from services.training.models.challenger_model import build_challenger_pipeline
 
 from pipelines.train_pipeline import time_based_split
 
@@ -35,10 +40,17 @@ def feature_cols() -> list[str]:
 
 
 @pytest.fixture()
-def trained_pipeline(processed_df, feature_cols):
+def trained_champion(processed_df, feature_cols):
     X = processed_df[feature_cols]
     y = processed_df[TARGET].values
     return train_champion(X, y)
+
+
+@pytest.fixture()
+def trained_challenger(processed_df, feature_cols):
+    X = processed_df[feature_cols]
+    y = processed_df[TARGET].values
+    return train_challenger(X, y)
 
 
 # ---------------------------------------------------------------------------
@@ -69,34 +81,133 @@ class TestChampionModel:
         pipeline = build_champion_pipeline()
         assert pipeline is not None
 
-    def test_train_returns_fitted_pipeline(self, trained_pipeline):
+    def test_train_returns_fitted_pipeline(self, trained_champion):
         """train_champion should return a fitted pipeline."""
-        # A fitted pipeline has the classes_ attribute on the classifier
-        clf = trained_pipeline.named_steps["classifier"]
+        clf = trained_champion.named_steps["classifier"]
         assert hasattr(clf, "classes_")
 
-    def test_predict_proba_shape(self, trained_pipeline, processed_df, feature_cols):
+    def test_predict_proba_shape(self, trained_champion, processed_df, feature_cols):
         """predict_proba should return one probability per row."""
         X = processed_df[feature_cols]
-        probs = predict_proba(trained_pipeline, X)
+        probs = predict_proba(trained_champion, X)
         assert probs.shape == (len(X),)
 
-    def test_probabilities_in_range(self, trained_pipeline, processed_df, feature_cols):
+    def test_probabilities_in_range(self, trained_champion, processed_df, feature_cols):
         """All probabilities should be between 0 and 1."""
         X = processed_df[feature_cols]
-        probs = predict_proba(trained_pipeline, X)
+        probs = predict_proba(trained_champion, X)
         assert probs.min() >= 0.0
         assert probs.max() <= 1.0
 
-    def test_model_learns_signal(self, trained_pipeline, processed_df, feature_cols):
+    def test_model_learns_signal(self, trained_champion, processed_df, feature_cols):
         """Model should produce ROC-AUC > 0.5 (better than random)."""
         X = processed_df[feature_cols]
         y = processed_df[TARGET].values
-        probs = predict_proba(trained_pipeline, X)
+        probs = predict_proba(trained_champion, X)
         metrics = compute_metrics(y, probs)
         assert metrics["roc_auc"] > 0.5, (
             f"ROC-AUC {metrics['roc_auc']} is not better than random"
         )
+
+
+# ---------------------------------------------------------------------------
+# Challenger model
+# ---------------------------------------------------------------------------
+class TestChallengerModel:
+    def test_pipeline_builds(self):
+        """Pipeline should be constructable without errors."""
+        pipeline = build_challenger_pipeline()
+        assert pipeline is not None
+
+    def test_model_name(self):
+        assert CHALLENGER_MODEL_NAME == "random_forest_v1"
+
+    def test_train_returns_fitted_pipeline(self, trained_challenger):
+        """train_challenger should return a fitted pipeline."""
+        clf = trained_challenger.named_steps["classifier"]
+        assert hasattr(clf, "estimators_")
+
+    def test_predict_proba_shape(self, trained_challenger, processed_df, feature_cols):
+        """predict_proba should return one probability per row."""
+        X = processed_df[feature_cols]
+        probs = predict_proba(trained_challenger, X)
+        assert probs.shape == (len(X),)
+
+    def test_probabilities_in_range(self, trained_challenger, processed_df, feature_cols):
+        """All probabilities should be between 0 and 1."""
+        X = processed_df[feature_cols]
+        probs = predict_proba(trained_challenger, X)
+        assert probs.min() >= 0.0
+        assert probs.max() <= 1.0
+
+    def test_model_learns_signal(self, trained_challenger, processed_df, feature_cols):
+        """Model should produce ROC-AUC > 0.5 (better than random)."""
+        X = processed_df[feature_cols]
+        y = processed_df[TARGET].values
+        probs = predict_proba(trained_challenger, X)
+        metrics = compute_metrics(y, probs)
+        assert metrics["roc_auc"] > 0.5, (
+            f"ROC-AUC {metrics['roc_auc']} is not better than random"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Promotion logic
+# ---------------------------------------------------------------------------
+class TestPromotion:
+    def test_challenger_promoted_when_better(self):
+        """Challenger should be promoted when it beats the policy thresholds."""
+        champion = {"roc_auc": 0.70, "recall": 0.60}
+        challenger = {"roc_auc": 0.72, "recall": 0.65}
+        policy = {"min_roc_auc_improvement": 0.01, "min_recall_threshold": 0.50}
+
+        result = compare_models(champion, challenger, policy=policy)
+        assert result["promoted"] is True
+        assert result["winner"] == "challenger"
+
+    def test_champion_retained_when_auc_insufficient(self):
+        """Champion stays if challenger AUC improvement is too small."""
+        champion = {"roc_auc": 0.70, "recall": 0.60}
+        challenger = {"roc_auc": 0.705, "recall": 0.65}
+        policy = {"min_roc_auc_improvement": 0.01, "min_recall_threshold": 0.50}
+
+        result = compare_models(champion, challenger, policy=policy)
+        assert result["promoted"] is False
+        assert result["winner"] == "champion"
+
+    def test_champion_retained_when_recall_too_low(self):
+        """Champion stays if challenger recall is below the floor."""
+        champion = {"roc_auc": 0.70, "recall": 0.60}
+        challenger = {"roc_auc": 0.75, "recall": 0.40}
+        policy = {"min_roc_auc_improvement": 0.01, "min_recall_threshold": 0.50}
+
+        result = compare_models(champion, challenger, policy=policy)
+        assert result["promoted"] is False
+        assert result["winner"] == "champion"
+
+    def test_comparison_output_keys(self):
+        """Comparison result should contain all expected keys."""
+        champion = {"roc_auc": 0.70, "recall": 0.60}
+        challenger = {"roc_auc": 0.72, "recall": 0.65}
+        policy = {"min_roc_auc_improvement": 0.01, "min_recall_threshold": 0.50}
+
+        result = compare_models(champion, challenger, policy=policy)
+        expected_keys = {
+            "champion_roc_auc", "challenger_roc_auc", "roc_auc_delta",
+            "challenger_recall", "min_roc_auc_improvement", "min_recall_threshold",
+            "meets_auc_requirement", "meets_recall_requirement",
+            "promoted", "winner",
+        }
+        assert set(result.keys()) == expected_keys
+
+    def test_exact_threshold_not_promoted(self):
+        """Challenger must EXCEED champion + delta, not just match it."""
+        champion = {"roc_auc": 0.70, "recall": 0.60}
+        challenger = {"roc_auc": 0.71, "recall": 0.60}
+        policy = {"min_roc_auc_improvement": 0.01, "min_recall_threshold": 0.50}
+
+        result = compare_models(champion, challenger, policy=policy)
+        assert result["promoted"] is True  # 0.71 >= 0.70 + 0.01
 
 
 # ---------------------------------------------------------------------------

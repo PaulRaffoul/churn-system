@@ -1,7 +1,10 @@
 """Thin orchestrator — train champion and challenger models.
 
 Loads processed data, splits by time, trains both models, compares
-them using the promotion policy, and saves artifacts.
+them on ROC-AUC (threshold-independent), and saves artifacts.
+
+Threshold optimization happens at scoring time, not here — this keeps
+model comparison fair and separate from the deployment threshold decision.
 
 Usage:
     uv run python -m pipelines.train_pipeline
@@ -23,7 +26,6 @@ from services.training import (
     TARGET,
     compare_models,
     compute_metrics,
-    find_optimal_threshold,
     predict_proba,
     train_challenger,
     train_champion,
@@ -104,22 +106,14 @@ def main() -> None:
     print("\n--- Champion: Logistic Regression ---")
     champion_pipeline = train_champion(X_train, y_train)
     champion_probs = predict_proba(champion_pipeline, X_val)
-
-    champion_threshold = find_optimal_threshold(
-        y_val, champion_probs, strategy="recall", min_recall=0.65,
-    )
-    champion_metrics = compute_metrics(y_val, champion_probs, threshold=champion_threshold)
+    champion_metrics = compute_metrics(y_val, champion_probs)
 
     champion_metrics["train_rows"] = len(train_df)
     champion_metrics["val_rows"] = len(val_df)
     champion_metrics["train_churn_rate"] = round(float(y_train.mean()), 4)
     champion_metrics["val_churn_rate"] = round(float(y_val.mean()), 4)
 
-    print(f"  Threshold: {champion_metrics['threshold']}")
     print(f"  ROC-AUC:   {champion_metrics['roc_auc']}")
-    print(f"  Precision: {champion_metrics['precision']}")
-    print(f"  Recall:    {champion_metrics['recall']}")
-    print(f"  F1:        {champion_metrics['f1']}")
 
     _save_model(champion_pipeline, champion_metrics, MODEL_NAME, artifacts_dir / "champion")
     print(f"  Saved to {artifacts_dir / 'champion'}")
@@ -128,34 +122,25 @@ def main() -> None:
     print("\n--- Challenger: Random Forest ---")
     challenger_pipeline = train_challenger(X_train, y_train)
     challenger_probs = predict_proba(challenger_pipeline, X_val)
-
-    challenger_threshold = find_optimal_threshold(
-        y_val, challenger_probs, strategy="recall", min_recall=0.65,
-    )
-    challenger_metrics = compute_metrics(y_val, challenger_probs, threshold=challenger_threshold)
+    challenger_metrics = compute_metrics(y_val, challenger_probs)
 
     challenger_metrics["train_rows"] = len(train_df)
     challenger_metrics["val_rows"] = len(val_df)
     challenger_metrics["train_churn_rate"] = round(float(y_train.mean()), 4)
     challenger_metrics["val_churn_rate"] = round(float(y_val.mean()), 4)
 
-    print(f"  Threshold: {challenger_metrics['threshold']}")
     print(f"  ROC-AUC:   {challenger_metrics['roc_auc']}")
-    print(f"  Precision: {challenger_metrics['precision']}")
-    print(f"  Recall:    {challenger_metrics['recall']}")
-    print(f"  F1:        {challenger_metrics['f1']}")
 
     _save_model(challenger_pipeline, challenger_metrics, CHALLENGER_MODEL_NAME, artifacts_dir / "challenger")
     print(f"  Saved to {artifacts_dir / 'challenger'}")
 
-    # Step 5: Compare and promote
+    # Step 5: Compare and promote (ROC-AUC only — threshold-independent)
     print("\n--- Promotion Decision ---")
     comparison = compare_models(champion_metrics, challenger_metrics)
-    print(f"  ROC-AUC delta:          {comparison['roc_auc_delta']:+.4f}")
-    print(f"  Meets AUC threshold:    {comparison['meets_auc_requirement']}")
-    print(f"  Meets recall floor:     {comparison['meets_recall_requirement']}")
-    print(f"  Meets precision floor:  {comparison['meets_precision_requirement']}")
-    print(f"  Winner:                 {comparison['winner']}")
+    print(f"  Champion ROC-AUC:     {comparison['champion_roc_auc']}")
+    print(f"  Challenger ROC-AUC:   {comparison['challenger_roc_auc']}")
+    print(f"  ROC-AUC delta:        {comparison['roc_auc_delta']:+.4f}")
+    print(f"  Winner:               {comparison['winner']}")
 
     # Save comparison artifact
     comparison_path = artifacts_dir / "model_comparison.json"
@@ -167,7 +152,6 @@ def main() -> None:
         print("\n  Challenger PROMOTED to champion!")
         champion_dir = artifacts_dir / "champion"
         challenger_dir = artifacts_dir / "challenger"
-        # Overwrite champion with challenger artifacts
         shutil.copy2(challenger_dir / "model.joblib", champion_dir / "model.joblib")
         shutil.copy2(challenger_dir / "metrics.json", champion_dir / "metrics.json")
         print(f"  Champion artifacts updated in {champion_dir}")

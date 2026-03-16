@@ -3,10 +3,13 @@
   "challenger_roc_auc": 0.6524,
   "roc_auc_delta": -0.0464,
   "challenger_recall": 0.0,
+  "challenger_precision": 0.0,
   "min_roc_auc_improvement": 0.01,
-  "min_recall_threshold": 0.5,
+  "min_recall_threshold": 0.65,
+  "min_precision_threshold": 0.15,
   "meets_auc_requirement": false,
   "meets_recall_requirement": false,
+  "meets_precision_requirement": false,
   "promoted": false,
   "winner": "champion"
 }

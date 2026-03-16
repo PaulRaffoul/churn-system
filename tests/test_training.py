@@ -156,10 +156,10 @@ class TestChallengerModel:
 # ---------------------------------------------------------------------------
 class TestPromotion:
     def test_challenger_promoted_when_better(self):
-        """Challenger should be promoted when it beats the policy thresholds."""
-        champion = {"roc_auc": 0.70, "recall": 0.60}
-        challenger = {"roc_auc": 0.72, "recall": 0.65}
-        policy = {"min_roc_auc_improvement": 0.01, "min_recall_threshold": 0.50}
+        """Challenger should be promoted when it beats all three gates."""
+        champion = {"roc_auc": 0.70, "recall": 0.60, "precision": 0.30}
+        challenger = {"roc_auc": 0.72, "recall": 0.70, "precision": 0.25}
+        policy = {"min_roc_auc_improvement": 0.01, "min_recall_threshold": 0.65, "min_precision_threshold": 0.15}
 
         result = compare_models(champion, challenger, policy=policy)
         assert result["promoted"] is True
@@ -167,9 +167,9 @@ class TestPromotion:
 
     def test_champion_retained_when_auc_insufficient(self):
         """Champion stays if challenger AUC improvement is too small."""
-        champion = {"roc_auc": 0.70, "recall": 0.60}
-        challenger = {"roc_auc": 0.705, "recall": 0.65}
-        policy = {"min_roc_auc_improvement": 0.01, "min_recall_threshold": 0.50}
+        champion = {"roc_auc": 0.70, "recall": 0.60, "precision": 0.30}
+        challenger = {"roc_auc": 0.705, "recall": 0.70, "precision": 0.25}
+        policy = {"min_roc_auc_improvement": 0.01, "min_recall_threshold": 0.65, "min_precision_threshold": 0.15}
 
         result = compare_models(champion, challenger, policy=policy)
         assert result["promoted"] is False
@@ -177,9 +177,19 @@ class TestPromotion:
 
     def test_champion_retained_when_recall_too_low(self):
         """Champion stays if challenger recall is below the floor."""
-        champion = {"roc_auc": 0.70, "recall": 0.60}
-        challenger = {"roc_auc": 0.75, "recall": 0.40}
-        policy = {"min_roc_auc_improvement": 0.01, "min_recall_threshold": 0.50}
+        champion = {"roc_auc": 0.70, "recall": 0.60, "precision": 0.30}
+        challenger = {"roc_auc": 0.75, "recall": 0.50, "precision": 0.25}
+        policy = {"min_roc_auc_improvement": 0.01, "min_recall_threshold": 0.65, "min_precision_threshold": 0.15}
+
+        result = compare_models(champion, challenger, policy=policy)
+        assert result["promoted"] is False
+        assert result["winner"] == "champion"
+
+    def test_champion_retained_when_precision_too_low(self):
+        """Champion stays if challenger precision is below the floor."""
+        champion = {"roc_auc": 0.70, "recall": 0.60, "precision": 0.30}
+        challenger = {"roc_auc": 0.75, "recall": 0.70, "precision": 0.10}
+        policy = {"min_roc_auc_improvement": 0.01, "min_recall_threshold": 0.65, "min_precision_threshold": 0.15}
 
         result = compare_models(champion, challenger, policy=policy)
         assert result["promoted"] is False
@@ -187,24 +197,25 @@ class TestPromotion:
 
     def test_comparison_output_keys(self):
         """Comparison result should contain all expected keys."""
-        champion = {"roc_auc": 0.70, "recall": 0.60}
-        challenger = {"roc_auc": 0.72, "recall": 0.65}
-        policy = {"min_roc_auc_improvement": 0.01, "min_recall_threshold": 0.50}
+        champion = {"roc_auc": 0.70, "recall": 0.60, "precision": 0.30}
+        challenger = {"roc_auc": 0.72, "recall": 0.70, "precision": 0.25}
+        policy = {"min_roc_auc_improvement": 0.01, "min_recall_threshold": 0.65, "min_precision_threshold": 0.15}
 
         result = compare_models(champion, challenger, policy=policy)
         expected_keys = {
             "champion_roc_auc", "challenger_roc_auc", "roc_auc_delta",
-            "challenger_recall", "min_roc_auc_improvement", "min_recall_threshold",
-            "meets_auc_requirement", "meets_recall_requirement",
+            "challenger_recall", "challenger_precision",
+            "min_roc_auc_improvement", "min_recall_threshold", "min_precision_threshold",
+            "meets_auc_requirement", "meets_recall_requirement", "meets_precision_requirement",
             "promoted", "winner",
         }
         assert set(result.keys()) == expected_keys
 
-    def test_exact_threshold_not_promoted(self):
-        """Challenger must EXCEED champion + delta, not just match it."""
-        champion = {"roc_auc": 0.70, "recall": 0.60}
-        challenger = {"roc_auc": 0.71, "recall": 0.60}
-        policy = {"min_roc_auc_improvement": 0.01, "min_recall_threshold": 0.50}
+    def test_exact_threshold_promoted(self):
+        """Challenger at exactly champion + delta should be promoted."""
+        champion = {"roc_auc": 0.70, "recall": 0.60, "precision": 0.30}
+        challenger = {"roc_auc": 0.71, "recall": 0.65, "precision": 0.20}
+        policy = {"min_roc_auc_improvement": 0.01, "min_recall_threshold": 0.65, "min_precision_threshold": 0.15}
 
         result = compare_models(champion, challenger, policy=policy)
         assert result["promoted"] is True  # 0.71 >= 0.70 + 0.01

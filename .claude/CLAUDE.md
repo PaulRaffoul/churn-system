@@ -613,10 +613,13 @@ Promotion policy stored in:
 monitoring/promotion_policy.json
 ```
 
-Example rule:
+Promotion gates (all three must pass):
 
-* challenger ROC-AUC ≥ champion + 0.01
-* recall ≥ minimum threshold
+* challenger ROC-AUC ≥ champion + 0.01 (overall ranking quality)
+* recall ≥ 0.65 (catch at least 2 out of 3 churners — missing a churner costs their lifetime value)
+* precision ≥ 0.15 (flagged customers must be 3x more likely to churn than random — prevents "flag everyone" models)
+
+Churn-specific rationale: **favor recall over precision**. A missed churner (false negative) costs their entire lifetime value. A false alarm (false positive) costs only a retention offer.
 
 Otherwise champion remains.
 

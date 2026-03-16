@@ -140,10 +140,11 @@ def main() -> None:
     # Step 5: Compare and promote
     print("\n--- Promotion Decision ---")
     comparison = compare_models(champion_metrics, challenger_metrics)
-    print(f"  ROC-AUC delta:        {comparison['roc_auc_delta']:+.4f}")
-    print(f"  Meets AUC threshold:  {comparison['meets_auc_requirement']}")
-    print(f"  Meets recall floor:   {comparison['meets_recall_requirement']}")
-    print(f"  Winner:               {comparison['winner']}")
+    print(f"  ROC-AUC delta:          {comparison['roc_auc_delta']:+.4f}")
+    print(f"  Meets AUC threshold:    {comparison['meets_auc_requirement']}")
+    print(f"  Meets recall floor:     {comparison['meets_recall_requirement']}")
+    print(f"  Meets precision floor:  {comparison['meets_precision_requirement']}")
+    print(f"  Winner:                 {comparison['winner']}")
 
     # Save comparison artifact
     comparison_path = artifacts_dir / "model_comparison.json"

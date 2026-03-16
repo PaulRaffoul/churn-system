@@ -1,5 +1,11 @@
 {
-  "promotion_rule": "challenger ROC-AUC >= champion ROC-AUC + 0.01 AND recall >= minimum_threshold",
+  "promotion_rule": "challenger ROC-AUC >= champion ROC-AUC + min_roc_auc_improvement AND recall >= min_recall_threshold AND precision >= min_precision_threshold",
   "min_roc_auc_improvement": 0.01,
-  "min_recall_threshold": 0.50
+  "min_recall_threshold": 0.65,
+  "min_precision_threshold": 0.15,
+  "rationale": {
+    "recall_floor": "Churn prediction favors recall — missing a churner (false negative) costs their entire lifetime value, while a false alarm (false positive) costs only a retention offer. 0.65 ensures we catch at least 2 out of 3 churners.",
+    "precision_floor": "With ~5% base churn rate, precision of 0.15 means flagged customers are 3x more likely to churn than random. Prevents models that flag everyone to game recall.",
+    "roc_auc_delta": "Challenger must be meaningfully better overall, not just a rounding error improvement."
+  }
 }
